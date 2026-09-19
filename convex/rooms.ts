@@ -3,6 +3,7 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import {
   ROOM_TTL_MS,
+  emptyBlanks,
   emptyBoard,
   passMove,
   playMove,
@@ -15,6 +16,7 @@ import { placementValidator } from "./schema";
 function toState(room: Doc<"rooms">): GameState {
   return {
     board: room.board,
+    blanks: room.blanks ?? emptyBlanks(),
     bag: room.bag,
     players: room.players,
     turnGuestId: room.turnGuestId,
@@ -28,6 +30,7 @@ function toState(room: Doc<"rooms">): GameState {
 function fromState(state: GameState) {
   return {
     board: state.board,
+    blanks: state.blanks,
     bag: state.bag,
     players: state.players,
     turnGuestId: state.turnGuestId,
@@ -45,6 +48,7 @@ function redact(room: Doc<"rooms">, guestId: string) {
     expiresAt: room.expiresAt,
     status: room.status,
     board: room.board,
+    blanks: room.blanks ?? emptyBlanks(),
     bagCount: room.bag.length,
     turnGuestId: room.turnGuestId,
     consecutivePasses: room.consecutivePasses,
@@ -95,6 +99,7 @@ export const createRoom = mutation({
       expiresAt: now + ROOM_TTL_MS,
       status: "lobby",
       board: emptyBoard(),
+      blanks: emptyBlanks(),
       bag: [],
       players: [{ guestId: args.guestId, name, score: 0, rack: [] }],
       turnGuestId: args.guestId,

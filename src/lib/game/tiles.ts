@@ -1,4 +1,4 @@
-import { BAG_PER_DIGIT, RACK_SIZE } from "./types";
+import { BAG_PER_DIGIT, BLANK, BLANK_COUNT, RACK_SIZE } from "./types";
 
 export type Rng = () => number;
 
@@ -20,7 +20,22 @@ export function createBag(rng: Rng = Math.random): number[] {
       bag.push(digit);
     }
   }
+  for (let i = 0; i < BLANK_COUNT; i++) {
+    bag.push(BLANK);
+  }
   return shuffle(bag, rng);
+}
+
+export function isBlankTile(tile: number): boolean {
+  return tile === BLANK;
+}
+
+export function sortRackTiles<T extends { digit: number }>(tiles: T[]): T[] {
+  return tiles.slice().sort((a, b) => {
+    if (isBlankTile(a.digit) && !isBlankTile(b.digit)) return 1;
+    if (!isBlankTile(a.digit) && isBlankTile(b.digit)) return -1;
+    return a.digit - b.digit;
+  });
 }
 
 export function drawTiles(
@@ -55,5 +70,5 @@ export function removeFromRack(
 }
 
 export function rackSum(rack: number[]): number {
-  return rack.reduce((sum, digit) => sum + digit, 0);
+  return rack.reduce((sum, digit) => (digit === BLANK ? sum : sum + digit), 0);
 }

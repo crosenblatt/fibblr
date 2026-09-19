@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { emptyBoard, idx } from "./board";
 import { playMove, previewPlay, startGame, passMove, swapMove } from "./move";
 import type { GameState, Placement, PlayerState } from "./types";
+import { BLANK } from "./types";
 
 function seeded(seed = 1) {
   let s = seed;
@@ -81,13 +82,21 @@ describe("previewPlay", () => {
     expect(disconnected.ok).toBe(false);
   });
 
-  it("allows a 1–2 tile connector and does not score it", () => {
+  it("scores a 2-tile line when digits differ by 0 or 1", () => {
+    const first = previewPlay(emptyBoard(), place([1, 1, 2], 6));
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const hook = previewPlay(first.board, [{ row: 8, col: 8, digit: 1 }]);
+    expect(hook.ok).toBe(true);
+    if (hook.ok) expect(hook.score).toBeGreaterThan(0);
+  });
+
+  it("rejects a 2-tile line with a larger delta", () => {
     const first = previewPlay(emptyBoard(), place([1, 1, 2], 6));
     expect(first.ok).toBe(true);
     if (!first.ok) return;
     const hook = previewPlay(first.board, [{ row: 8, col: 8, digit: 9 }]);
-    expect(hook.ok).toBe(true);
-    if (hook.ok) expect(hook.score).toBe(0);
+    expect(hook.ok).toBe(false);
   });
 
   it("scores an extension that forms a longer fib line", () => {
@@ -97,6 +106,18 @@ describe("previewPlay", () => {
     const extend = previewPlay(first.board, [{ row: 7, col: 9, digit: 3 }]);
     expect(extend.ok).toBe(true);
     if (extend.ok) expect(extend.score).toBeGreaterThan(0);
+  });
+
+  it("scores a blank as 0 while using its assigned digit in the sequence", () => {
+    const result = previewPlay(emptyBoard(), [
+      { row: 7, col: 6, digit: 1 },
+      { row: 7, col: 7, digit: 1, blank: true },
+      { row: 7, col: 8, digit: 2 },
+    ]);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.score).toBe(6);
+    }
   });
 });
 
@@ -117,6 +138,24 @@ describe("playMove", () => {
     const state = withRack(startGame(players(), seeded()), "a", [9, 9, 9, 9, 9, 9, 9]);
     const result = playMove(state, "a", place([1, 1, 2], 6), seeded());
     expect(result.ok).toBe(false);
+  });
+
+  it("consumes a blank from the rack when playing an assigned wildcard", () => {
+    let state = withRack(startGame(players(), seeded()), "a", [1, BLANK, 2, 4, 5, 6, 7]);
+    const result = playMove(
+      state,
+      "a",
+      [
+        { row: 7, col: 6, digit: 1 },
+        { row: 7, col: 7, digit: 1, blank: true },
+        { row: 7, col: 8, digit: 2 },
+      ],
+      seeded(2),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.blanks[idx(7, 7)]).toBe(true);
+    expect(result.state.players[0]!.rack.includes(BLANK)).toBe(false);
   });
 });
 

@@ -2,15 +2,17 @@ import {
   boardHasTiles,
   cloneBoard,
   emptyBoard,
+  emptyBlanks,
   getDigit,
   idx,
   inBounds,
   premiumAt,
 } from "./board";
-import { isDigit, isFibSequence } from "./fib";
+import { isDigit, isValidSequence } from "./fib";
 import { createBag, fillRack, rackSum, removeFromRack, shuffle, type Rng } from "./tiles";
 import {
   BINGO_BONUS,
+  BLANK,
   CENTER,
   RACK_SIZE,
   type EngineResult,
@@ -119,12 +121,19 @@ function isAdjacentToExisting(
   return false;
 }
 
-function scoreLine(cells: Cell[], newKeys: Set<string>): number {
+function scoreLine(
+  cells: Cell[],
+  newKeys: Set<string>,
+  blanks: boolean[],
+  newBlanks: Set<string>,
+): number {
   let sum = 0;
   let wordMult = 1;
   for (const cell of cells) {
-    let value = cell.digit;
-    if (newKeys.has(`${cell.row},${cell.col}`)) {
+    const key = `${cell.row},${cell.col}`;
+    const blank = newBlanks.has(key) || blanks[idx(cell.row, cell.col)] === true;
+    let value = blank ? 0 : cell.digit;
+    if (newKeys.has(key)) {
       const premium = premiumAt(cell.row, cell.col);
       if (premium === "dl") value *= 2;
       if (premium === "tl") value *= 3;
@@ -139,8 +148,12 @@ function scoreLine(cells: Cell[], newKeys: Set<string>): number {
 function collectLines(
   board: (number | null)[],
   placements: Placement[],
+  blanks: boolean[],
 ): Line[] {
   const newKeys = new Set(placements.map((p) => `${p.row},${p.col}`));
+  const newBlanks = new Set(
+    placements.filter((p) => p.blank).map((p) => `${p.row},${p.col}`),
+  );
   const lines = new Map<string, Line>();
   for (const p of placements) {
     const horiz = walkLine(board, p.row, p.col, 0, 1);
@@ -149,7 +162,7 @@ function collectLines(
       if (cells.length === 0) continue;
       const k = lineKey(cells);
       if (lines.has(k)) continue;
-      lines.set(k, { cells, score: scoreLine(cells, newKeys) });
+      lines.set(k, { cells, score: scoreLine(cells, newKeys, blanks, newBlanks) });
     }
   }
   return [...lines.values()];
@@ -223,7 +236,13 @@ function advanceTurn(state: GameState, guestId: string): string {
 export function previewPlay(
   board: (number | null)[],
   placements: Placement[],
-): EngineResult<{ score: number; lines: Line[]; board: (number | null)[] }> {
+  blanks: boolean[] = emptyBlanks(),
+): EngineResult<{
+  score: number;
+  lines: Line[];
+  board: (number | null)[];
+  blanks: boolean[];
+}> {
   const uniqueError = uniquePlacements(placements);
   if (uniqueError) return { ok: false, error: uniqueError };
 
@@ -251,26 +270,37 @@ export function previewPlay(
     return { ok: false, error: "Tiles must form one contiguous line." };
   }
 
-  const lines = collectLines(applied.board, placements);
+  const lines = collectLines(applied.board, placements, blanks);
   for (const line of lines) {
     const digits = line.cells.map((c) => c.digit);
-    if (digits.length >= 3 && !isFibSequence(digits)) {
+    if (digits.length >= 2 && !isValidSequence(digits)) {
       return {
         ok: false,
-        error: `Not a Fibonacci sequence: ${digits.join("-")}.`,
+        error:
+          digits.length === 2
+            ? `Two-tile plays must differ by 0 or 1: ${digits.join("-")}.`
+            : `Not a Fibonacci sequence: ${digits.join("-")}.`,
       };
     }
   }
 
   let score = 0;
   for (const line of lines) {
-    if (line.cells.length >= 3) {
+    if (line.cells.length >= 2) {
       score += line.score;
     }
   }
   if (placements.length === RACK_SIZE) score += BINGO_BONUS;
 
-  return { ok: true, score, lines, board: applied.board };
+  const nextBlanks = (blanks.length === applied.board.length
+    ? blanks
+    : emptyBlanks()
+  ).slice();
+  for (const p of placements) {
+    nextBlanks[idx(p.row, p.col)] = Boolean(p.blank);
+  }
+
+  return { ok: true, score, lines, board: applied.board, blanks: nextBlanks };
 }
 
 export function playMove(
@@ -282,12 +312,12 @@ export function playMove(
   const turn = requireTurn(state, guestId);
   if (!turn.ok) return turn;
 
-  const preview = previewPlay(state.board, placements);
+  const preview = previewPlay(state.board, placements, state.blanks ?? emptyBlanks());
   if (!preview.ok) return preview;
 
   const used = removeFromRack(
     turn.player.rack,
-    placements.map((p) => p.digit),
+    placements.map((p) => (p.blank ? BLANK : p.digit)),
   );
   if (!used) {
     return { ok: false, error: "Those tiles are not on your rack." };
@@ -308,6 +338,7 @@ export function playMove(
   let next: GameState = {
     ...state,
     board: preview.board,
+    blanks: preview.blanks,
     bag: shuffle(filled.bag, rng),
     players,
     turnGuestId: advanceTurn(state, guestId),
@@ -396,6 +427,7 @@ export function startGame(
   });
   return {
     board: emptyBoard(),
+    blanks: emptyBlanks(),
     bag,
     players: dealt,
     turnGuestId: dealt[0]?.guestId ?? null,
