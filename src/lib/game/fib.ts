@@ -1,8 +1,14 @@
-/** Fibonacci mod 10 for length 3+. Length 2 is valid when |a−b| is 0 or 1. Length 1 is always a connector. */
+/** Circular distance on digits 0–9, so 9 and 0 are 1 apart. */
+function digitStep(a: number, b: number): number {
+  const d = Math.abs(a - b);
+  return Math.min(d, 10 - d);
+}
+
+/** Fibonacci mod 10 for length 3+. Length 2 is valid when the digits are 1 apart (9–0 wraps). Length 1 is always a connector. */
 export function isValidSequence(digits: number[]): boolean {
   if (digits.length <= 1) return true;
   if (digits.length === 2) {
-    return Math.abs(digits[0]! - digits[1]!) <= 1;
+    return digitStep(digits[0]!, digits[1]!) === 1;
   }
   return isFibSequence(digits);
 }

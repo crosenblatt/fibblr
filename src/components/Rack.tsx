@@ -1,6 +1,6 @@
 import { readTileDrag, setTileDrag, type TileDrag } from "@/lib/drag";
 import { TileFace } from "@/components/TileFace";
-import { isBlankTile } from "@/lib/game";
+import { useLayoutEffect, useRef, useState } from "react";
 
 type Tile = { index: number; digit: number };
 
@@ -14,6 +14,8 @@ type Props = {
   onReorder?: (fromIndex: number, beforeIndex: number | null) => void;
 };
 
+const FLIP_MS = 320;
+
 export function Rack({
   tiles,
   selected,
@@ -23,7 +25,55 @@ export function Rack({
   onDropPending,
   onReorder,
 }: Props) {
-  const canDrag = draggableTiles;
+  const canDrag = draggableTiles && !disabled;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const prevRects = useRef(new Map<number, DOMRect>());
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const layoutKey = `${tiles.map((tile) => tile.index).join(",")}:${draggingIndex ?? ""}`;
+
+  useLayoutEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+    const nodes = [...root.querySelectorAll<HTMLElement>("[data-rack-tile]")];
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const nextRects = new Map<number, DOMRect>();
+    const firstLayout = prevRects.current.size === 0;
+
+    for (const node of nodes) {
+      const id = Number(node.dataset.rackTile);
+      if (Number.isNaN(id)) continue;
+      if (id === draggingIndex) {
+        const kept = prevRects.current.get(id);
+        if (kept) nextRects.set(id, kept);
+        continue;
+      }
+      const last = node.getBoundingClientRect();
+      nextRects.set(id, last);
+      if (firstLayout || reduced) continue;
+
+      const first = prevRects.current.get(id);
+      node.getAnimations().forEach((animation) => animation.cancel());
+      if (!first) {
+        node.animate(
+          [
+            { transform: "scale(0.86)", opacity: 0.35 },
+            { transform: "scale(1)", opacity: 1 },
+          ],
+          { duration: FLIP_MS, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+        );
+        continue;
+      }
+      const dx = first.left - last.left;
+      const dy = first.top - last.top;
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+      node.animate(
+        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }],
+        { duration: FLIP_MS, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+      );
+    }
+
+    prevRects.current = nextRects;
+  }, [layoutKey, draggingIndex]);
 
   function acceptDrop(event: React.DragEvent) {
     event.preventDefault();
@@ -45,48 +95,58 @@ export function Rack({
 
   return (
     <div
-      className="flex min-h-16 flex-wrap justify-center gap-2 rounded-md border border-dashed border-[#3d4a44] px-4 py-3"
+      ref={containerRef}
+      className="relative flex min-h-16 flex-wrap justify-center gap-2 rounded-md border border-dashed border-[#3d4a44] px-4 py-3"
       onDragOver={(event) => {
         if (!onDropPending && !onReorder) return;
         acceptDrop(event);
       }}
       onDrop={(event) => handleDrop(event, null)}
     >
-      {tiles.map((tile) => (
-        <button
-          key={tile.index}
-          type="button"
-          disabled={disabled && !canDrag}
-          draggable={canDrag}
-          onClick={() => {
-            if (disabled) return;
-            onToggle(tile.index);
-          }}
-          onDragStart={(event) => {
-            if (!canDrag) return;
-            setTileDrag(event, {
-              source: "rack",
-              rackIndex: tile.index,
-              digit: tile.digit,
-              blank: isBlankTile(tile.digit) || undefined,
-            });
-          }}
-          onDragOver={(event) => {
-            if (!canDrag && !onDropPending) return;
-            event.stopPropagation();
-            acceptDrop(event);
-          }}
-          onDrop={(event) => {
-            event.stopPropagation();
-            handleDrop(event, tile.index);
-          }}
-          className={`cursor-grab rounded-sm active:cursor-grabbing ${
-            selected.has(tile.index) ? "-translate-y-1 ring-2 ring-[#c8b48a]" : ""
-          }`}
-        >
-          <TileFace digit={tile.digit} size="rack" />
-        </button>
-      ))}
+      {tiles.map((tile) => {
+        const lifting = draggingIndex === tile.index;
+        return (
+          <div
+            key={tile.index}
+            data-rack-tile={tile.index}
+            className={lifting ? "pointer-events-none absolute opacity-0" : undefined}
+          >
+            <button
+              type="button"
+              disabled={disabled}
+              draggable={canDrag}
+              onClick={() => {
+                if (disabled) return;
+                onToggle(tile.index);
+              }}
+              onDragStart={(event) => {
+                if (!canDrag) return;
+                setTileDrag(event, {
+                  source: "rack",
+                  rackIndex: tile.index,
+                  digit: tile.digit,
+                });
+                setDraggingIndex(tile.index);
+              }}
+              onDragEnd={() => setDraggingIndex(null)}
+              onDragOver={(event) => {
+                if (!canDrag && !onDropPending) return;
+                event.stopPropagation();
+                acceptDrop(event);
+              }}
+              onDrop={(event) => {
+                event.stopPropagation();
+                handleDrop(event, tile.index);
+              }}
+              className={`rounded-sm disabled:opacity-100 ${
+                canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed"
+              } ${selected.has(tile.index) ? "-translate-y-1 ring-2 ring-[#c8b48a]" : ""}`}
+            >
+              <TileFace digit={tile.digit} size="rack" muted={disabled} />
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

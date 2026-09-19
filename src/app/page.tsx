@@ -51,9 +51,10 @@ function HomeClient() {
         <p className="text-base leading-7 text-[#d7d1c4]">
           Play on a 15×15 Scrabble board with digits 0–9. A legal word is a
           Fibonacci sequence of 3 or more tiles, wrapping with modulo 10. A
-          two-tile play is legal if the digits differ by 0 or 1. Two blank
-          tiles are wild (any digit, score 0). Create a room and send the
-          link to a friend.
+          two-tile play is legal if the digits differ by exactly 1 (9 and 0
+          wrap). Two blank
+          tiles are wild (pick a digit when you play them; they score that
+          digit). Create a room and send the link to a friend.
         </p>
       </div>
       <form onSubmit={onCreate} className="flex flex-col gap-3">

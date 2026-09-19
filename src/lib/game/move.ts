@@ -121,18 +121,12 @@ function isAdjacentToExisting(
   return false;
 }
 
-function scoreLine(
-  cells: Cell[],
-  newKeys: Set<string>,
-  blanks: boolean[],
-  newBlanks: Set<string>,
-): number {
+function scoreLine(cells: Cell[], newKeys: Set<string>): number {
   let sum = 0;
   let wordMult = 1;
   for (const cell of cells) {
     const key = `${cell.row},${cell.col}`;
-    const blank = newBlanks.has(key) || blanks[idx(cell.row, cell.col)] === true;
-    let value = blank ? 0 : cell.digit;
+    let value = cell.digit;
     // Premiums apply only for tiles placed on this turn (first use of the square).
     if (newKeys.has(key)) {
       const premium = premiumAt(cell.row, cell.col);
@@ -146,15 +140,8 @@ function scoreLine(
   return sum * wordMult;
 }
 
-function collectLines(
-  board: (number | null)[],
-  placements: Placement[],
-  blanks: boolean[],
-): Line[] {
+function collectLines(board: (number | null)[], placements: Placement[]): Line[] {
   const newKeys = new Set(placements.map((p) => `${p.row},${p.col}`));
-  const newBlanks = new Set(
-    placements.filter((p) => p.blank).map((p) => `${p.row},${p.col}`),
-  );
   const lines = new Map<string, Line>();
   for (const p of placements) {
     const horiz = walkLine(board, p.row, p.col, 0, 1);
@@ -163,7 +150,7 @@ function collectLines(
       if (cells.length === 0) continue;
       const k = lineKey(cells);
       if (lines.has(k)) continue;
-      lines.set(k, { cells, score: scoreLine(cells, newKeys, blanks, newBlanks) });
+      lines.set(k, { cells, score: scoreLine(cells, newKeys) });
     }
   }
   return [...lines.values()];
@@ -271,7 +258,7 @@ export function previewPlay(
     return { ok: false, error: "Tiles must form one contiguous line." };
   }
 
-  const lines = collectLines(applied.board, placements, blanks);
+  const lines = collectLines(applied.board, placements);
   for (const line of lines) {
     const digits = line.cells.map((c) => c.digit);
     if (digits.length >= 2 && !isValidSequence(digits)) {
@@ -279,7 +266,7 @@ export function previewPlay(
         ok: false,
         error:
           digits.length === 2
-            ? `Two-tile plays must differ by 0 or 1: ${digits.join("-")}.`
+            ? `Two-tile plays must differ by 1 (9 and 0 count): ${digits.join("-")}.`
             : `Not a Fibonacci sequence: ${digits.join("-")}.`,
       };
     }

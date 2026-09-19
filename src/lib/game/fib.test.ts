@@ -7,14 +7,16 @@ describe("isValidSequence", () => {
     expect(isValidSequence([4])).toBe(true);
   });
 
-  it("accepts two tiles that differ by 0 or 1", () => {
-    expect(isValidSequence([8, 8])).toBe(true);
+  it("accepts two tiles that differ by exactly 1, wrapping 9–0", () => {
     expect(isValidSequence([8, 7])).toBe(true);
     expect(isValidSequence([8, 9])).toBe(true);
     expect(isValidSequence([0, 1])).toBe(true);
+    expect(isValidSequence([9, 0])).toBe(true);
+    expect(isValidSequence([0, 9])).toBe(true);
   });
 
-  it("rejects two tiles with a larger delta", () => {
+  it("rejects two tiles that are the same or farther than 1", () => {
+    expect(isValidSequence([8, 8])).toBe(false);
     expect(isValidSequence([8, 3])).toBe(false);
     expect(isValidSequence([1, 9])).toBe(false);
   });
