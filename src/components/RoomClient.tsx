@@ -293,7 +293,7 @@ function RoomView({
           {room.status === "active" ? (
             <p className="text-sm text-[#d7d1c4]">
               {room.turnGuestId === guestId
-                ? "Your turn. Sequences of 3+ must be Fibonacci mod 10. Two tiles are legal if they differ by 0 or 1. Enter submits. Blanks are wild and score 0."
+                ? "Your turn. Sequences of 3+ must be Fibonacci mod 10. Two tiles are legal if they differ by 1 (9 and 0 wrap). Enter submits. Blanks are wild and score as the digit you assign."
                 : `Waiting for ${room.players.find((p) => p.guestId === room.turnGuestId)?.name ?? "opponent"}.`}{" "}
               Bag: {room.bagCount} tiles.
             </p>
@@ -465,7 +465,8 @@ function PlayArea({
       setError(null);
       return;
     }
-    if (isBlankTile(payload.digit) && !payload.blank) {
+    const rackDigit = you.rack[payload.rackIndex];
+    if (isBlankTile(rackDigit ?? payload.digit)) {
       setAssignBlank({ row, col, rackIndex: payload.rackIndex });
       setPending((current) =>
         current.filter(
@@ -530,6 +531,9 @@ function PlayArea({
 
   function removePending(row: number, col: number) {
     setPending((current) => current.filter((p) => !(p.row === row && p.col === col)));
+    setAssignBlank((current) =>
+      current && current.row === row && current.col === col ? null : current,
+    );
   }
 
   function undoPlacements() {
@@ -639,7 +643,7 @@ function PlayArea({
               tiles={rackTiles}
               selected={swapMode ? swapSelected : selectedRack !== null ? new Set([selectedRack]) : new Set()}
               disabled={!yourTurn}
-              draggableTiles={!swapMode}
+              draggableTiles={yourTurn && !swapMode}
               onToggle={toggleRack}
               onDropPending={(payload) => removePending(payload.fromRow, payload.fromCol)}
               onReorder={reorderRack}

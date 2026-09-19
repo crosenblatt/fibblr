@@ -82,7 +82,7 @@ describe("previewPlay", () => {
     expect(disconnected.ok).toBe(false);
   });
 
-  it("scores a 2-tile line when digits differ by 0 or 1", () => {
+  it("scores a 2-tile line when digits differ by 1", () => {
     const first = previewPlay(emptyBoard(), place([1, 1, 2], 6));
     expect(first.ok).toBe(true);
     if (!first.ok) return;
@@ -91,12 +91,23 @@ describe("previewPlay", () => {
     if (hook.ok) expect(hook.score).toBeGreaterThan(0);
   });
 
-  it("rejects a 2-tile line with a larger delta", () => {
+  it("scores a 2-tile wrap of 9 and 0", () => {
+    const first = previewPlay(emptyBoard(), place([0, 1, 1], 6));
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const hook = previewPlay(first.board, [{ row: 8, col: 6, digit: 9 }]);
+    expect(hook.ok).toBe(true);
+    if (hook.ok) expect(hook.score).toBeGreaterThan(0);
+  });
+
+  it("rejects a 2-tile line that is a double or farther than 1", () => {
     const first = previewPlay(emptyBoard(), place([1, 1, 2], 6));
     expect(first.ok).toBe(true);
     if (!first.ok) return;
-    const hook = previewPlay(first.board, [{ row: 8, col: 8, digit: 9 }]);
-    expect(hook.ok).toBe(false);
+    const same = previewPlay(first.board, [{ row: 8, col: 6, digit: 1 }]);
+    expect(same.ok).toBe(false);
+    const far = previewPlay(first.board, [{ row: 8, col: 8, digit: 9 }]);
+    expect(far.ok).toBe(false);
   });
 
   it("does not reapply the center double when extending the opening word", () => {
@@ -112,7 +123,7 @@ describe("previewPlay", () => {
     }
   });
 
-  it("scores a blank as 0 while using its assigned digit in the sequence", () => {
+  it("scores a blank as its assigned digit in the sequence", () => {
     const result = previewPlay(emptyBoard(), [
       { row: 7, col: 6, digit: 1 },
       { row: 7, col: 7, digit: 1, blank: true },
@@ -120,7 +131,8 @@ describe("previewPlay", () => {
     ]);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.score).toBe(6);
+      // 1+1+2 = 4, center DW on the blank 1 → 8
+      expect(result.score).toBe(8);
     }
   });
 });
