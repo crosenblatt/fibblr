@@ -1,6 +1,6 @@
 import { readTileDrag, setTileDrag, type TileDrag } from "@/lib/drag";
 import { TileFace } from "@/components/TileFace";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 type Tile = { index: number; digit: number };
 
@@ -28,8 +28,7 @@ export function Rack({
   const canDrag = draggableTiles && !disabled;
   const containerRef = useRef<HTMLDivElement>(null);
   const prevRects = useRef(new Map<number, DOMRect>());
-  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
-  const layoutKey = `${tiles.map((tile) => tile.index).join(",")}:${draggingIndex ?? ""}`;
+  const layoutKey = tiles.map((tile) => tile.index).join(",");
 
   useLayoutEffect(() => {
     const root = containerRef.current;
@@ -42,11 +41,6 @@ export function Rack({
     for (const node of nodes) {
       const id = Number(node.dataset.rackTile);
       if (Number.isNaN(id)) continue;
-      if (id === draggingIndex) {
-        const kept = prevRects.current.get(id);
-        if (kept) nextRects.set(id, kept);
-        continue;
-      }
       const last = node.getBoundingClientRect();
       nextRects.set(id, last);
       if (firstLayout || reduced) continue;
@@ -73,7 +67,7 @@ export function Rack({
     }
 
     prevRects.current = nextRects;
-  }, [layoutKey, draggingIndex]);
+  }, [layoutKey]);
 
   function acceptDrop(event: React.DragEvent) {
     event.preventDefault();
@@ -103,50 +97,50 @@ export function Rack({
       }}
       onDrop={(event) => handleDrop(event, null)}
     >
-      {tiles.map((tile) => {
-        const lifting = draggingIndex === tile.index;
-        return (
-          <div
-            key={tile.index}
-            data-rack-tile={tile.index}
-            className={lifting ? "pointer-events-none absolute opacity-0" : undefined}
+      {tiles.map((tile) => (
+        <div key={tile.index} data-rack-tile={tile.index}>
+          <button
+            type="button"
+            disabled={disabled}
+            draggable={canDrag}
+            onClick={() => {
+              if (disabled) return;
+              onToggle(tile.index);
+            }}
+            onDragStart={(event) => {
+              if (!canDrag) {
+                event.preventDefault();
+                return;
+              }
+              setTileDrag(event, {
+                source: "rack",
+                rackIndex: tile.index,
+                digit: tile.digit,
+              });
+              const ghost = event.currentTarget;
+              event.dataTransfer.setDragImage(
+                ghost,
+                ghost.offsetWidth / 2,
+                ghost.offsetHeight / 2,
+              );
+            }}
+            onDragOver={(event) => {
+              if (!canDrag && !onDropPending) return;
+              event.stopPropagation();
+              acceptDrop(event);
+            }}
+            onDrop={(event) => {
+              event.stopPropagation();
+              handleDrop(event, tile.index);
+            }}
+            className={`rounded-sm disabled:opacity-100 ${
+              canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed"
+            } ${selected.has(tile.index) ? "-translate-y-1 ring-2 ring-[#c8b48a]" : ""}`}
           >
-            <button
-              type="button"
-              disabled={disabled}
-              draggable={canDrag}
-              onClick={() => {
-                if (disabled) return;
-                onToggle(tile.index);
-              }}
-              onDragStart={(event) => {
-                if (!canDrag) return;
-                setTileDrag(event, {
-                  source: "rack",
-                  rackIndex: tile.index,
-                  digit: tile.digit,
-                });
-                setDraggingIndex(tile.index);
-              }}
-              onDragEnd={() => setDraggingIndex(null)}
-              onDragOver={(event) => {
-                if (!canDrag && !onDropPending) return;
-                event.stopPropagation();
-                acceptDrop(event);
-              }}
-              onDrop={(event) => {
-                event.stopPropagation();
-                handleDrop(event, tile.index);
-              }}
-              className={`rounded-sm disabled:opacity-100 ${
-                canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed"
-              } ${selected.has(tile.index) ? "-translate-y-1 ring-2 ring-[#c8b48a]" : ""}`}
-            >
-              <TileFace digit={tile.digit} size="rack" muted={disabled} />
-            </button>
-          </div>
-        );
-      })}
+            <TileFace digit={tile.digit} size="rack" muted={disabled} />
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
