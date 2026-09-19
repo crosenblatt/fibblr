@@ -1,4 +1,4 @@
-export { BOARD_SIZE, CENTER, RACK_SIZE, BINGO_BONUS, ROOM_TTL_MS } from "./types";
+export { BOARD_SIZE, CENTER, RACK_SIZE, BINGO_BONUS, BLANK, BLANK_COUNT, ROOM_TTL_MS } from "./types";
 export type {
   Premium,
   RoomStatus,
@@ -10,7 +10,7 @@ export type {
   PlayResult,
   EngineResult,
 } from "./types";
-export { premiumAt, emptyBoard, idx, inBounds, getDigit, boardHasTiles } from "./board";
-export { isFibSequence, isDigit } from "./fib";
-export { createBag, shuffle, fillRack, removeFromRack, rackSum } from "./tiles";
+export { premiumAt, emptyBoard, emptyBlanks, idx, inBounds, getDigit, boardHasTiles } from "./board";
+export { isFibSequence, isDigit, isValidSequence } from "./fib";
+export { createBag, shuffle, fillRack, removeFromRack, rackSum, isBlankTile, sortRackTiles } from "./tiles";
 export { previewPlay, playMove, passMove, swapMove, startGame, newBag } from "./move";

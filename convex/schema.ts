@@ -12,6 +12,7 @@ export const placementValidator = v.object({
   row: v.number(),
   col: v.number(),
   digit: v.number(),
+  blank: v.optional(v.boolean()),
 });
 
 export const lastMoveValidator = v.object({
@@ -33,6 +34,7 @@ export default defineSchema({
       v.literal("expired"),
     ),
     board: v.array(v.union(v.number(), v.null())),
+    blanks: v.optional(v.array(v.boolean())),
     bag: v.array(v.number()),
     players: v.array(playerValidator),
     turnGuestId: v.union(v.string(), v.null()),

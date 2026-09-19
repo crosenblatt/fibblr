@@ -90,6 +90,10 @@ export function emptyBoard(): (number | null)[] {
   return Array.from({ length: BOARD_SIZE * BOARD_SIZE }, () => null);
 }
 
+export function emptyBlanks(): boolean[] {
+  return Array.from({ length: BOARD_SIZE * BOARD_SIZE }, () => false);
+}
+
 export function idx(row: number, col: number): number {
   return row * BOARD_SIZE + col;
 }

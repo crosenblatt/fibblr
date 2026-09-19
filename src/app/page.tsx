@@ -50,8 +50,10 @@ function HomeClient() {
         <h1 className="text-5xl font-semibold tracking-tight">Fibblr</h1>
         <p className="text-base leading-7 text-[#d7d1c4]">
           Play on a 15×15 Scrabble board with digits 0–9. A legal word is a
-          Fibonacci sequence of 3 or more tiles, wrapping with modulo 10. Create
-          a room and send the link to a friend.
+          Fibonacci sequence of 3 or more tiles, wrapping with modulo 10. A
+          two-tile play is legal if the digits differ by 0 or 1. Two blank
+          tiles are wild (any digit, score 0). Create a room and send the
+          link to a friend.
         </p>
       </div>
       <form onSubmit={onCreate} className="flex flex-col gap-3">

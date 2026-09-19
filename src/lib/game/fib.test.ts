@@ -1,11 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { isFibSequence } from "./fib";
+import { isFibSequence, isValidSequence } from "./fib";
+
+describe("isValidSequence", () => {
+  it("accepts length 0–1", () => {
+    expect(isValidSequence([])).toBe(true);
+    expect(isValidSequence([4])).toBe(true);
+  });
+
+  it("accepts two tiles that differ by 0 or 1", () => {
+    expect(isValidSequence([8, 8])).toBe(true);
+    expect(isValidSequence([8, 7])).toBe(true);
+    expect(isValidSequence([8, 9])).toBe(true);
+    expect(isValidSequence([0, 1])).toBe(true);
+  });
+
+  it("rejects two tiles with a larger delta", () => {
+    expect(isValidSequence([8, 3])).toBe(false);
+    expect(isValidSequence([1, 9])).toBe(false);
+  });
+});
 
 describe("isFibSequence", () => {
-  it("accepts connectors shorter than 3", () => {
-    expect(isFibSequence([])).toBe(true);
-    expect(isFibSequence([4])).toBe(true);
-    expect(isFibSequence([8, 3])).toBe(true);
+  it("requires at least 3 tiles", () => {
+    expect(isFibSequence([8, 3])).toBe(false);
   });
 
   it("accepts classic Fibonacci modulo 10", () => {
