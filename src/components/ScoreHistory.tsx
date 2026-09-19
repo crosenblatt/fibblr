@@ -1,7 +1,7 @@
 type HistoryEntry = {
   guestId: string;
   name: string;
-  kind: "play" | "pass" | "swap";
+  kind: "play" | "pass" | "swap" | "forfeit";
   placements: { digit: number }[];
   score: number;
   at: number;
@@ -10,6 +10,7 @@ type HistoryEntry = {
 function lineFor(entry: HistoryEntry): string {
   if (entry.kind === "pass") return "passed";
   if (entry.kind === "swap") return "swapped tiles";
+  if (entry.kind === "forfeit") return "forfeited";
   const sequence = entry.placements.map((p) => p.digit).join("-");
   return sequence ? `scored ${entry.score} (${sequence})` : `scored ${entry.score}`;
 }

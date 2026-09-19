@@ -26,7 +26,7 @@ export type PlayerState = {
 
 export type LastMove = {
   guestId: string;
-  kind: "play" | "pass" | "swap";
+  kind: "play" | "pass" | "swap" | "forfeit";
   placements: Placement[];
   score: number;
 };

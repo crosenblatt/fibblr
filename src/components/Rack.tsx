@@ -1,5 +1,6 @@
 import { readTileDrag, setTileDrag, type TileDrag } from "@/lib/drag";
 import { TileFace } from "@/components/TileFace";
+import { isBlankTile } from "@/lib/game";
 
 type Tile = { index: number; digit: number };
 
@@ -67,6 +68,7 @@ export function Rack({
               source: "rack",
               rackIndex: tile.index,
               digit: tile.digit,
+              blank: isBlankTile(tile.digit) || undefined,
             });
           }}
           onDragOver={(event) => {

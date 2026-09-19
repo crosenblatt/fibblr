@@ -17,7 +17,7 @@ export const placementValidator = v.object({
 
 export const lastMoveValidator = v.object({
   guestId: v.string(),
-  kind: v.union(v.literal("play"), v.literal("pass"), v.literal("swap")),
+  kind: v.union(v.literal("play"), v.literal("pass"), v.literal("swap"), v.literal("forfeit")),
   placements: v.array(placementValidator),
   score: v.number(),
 });
