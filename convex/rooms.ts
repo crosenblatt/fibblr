@@ -9,6 +9,7 @@ import {
   playMove,
   startGame,
   swapMove,
+  forfeitMove,
   type GameState,
   type LastMove,
 } from "../src/lib/game";
@@ -212,6 +213,24 @@ export const swapTiles = mutation({
     if (!room) throw new Error("Room not found.");
     if (Date.now() > room.expiresAt) throw new Error("This room has expired.");
     const result = swapMove(toState(room), args.guestId, args.digits);
+    if (!result.ok) throw new Error(result.error);
+    await ctx.db.patch(room._id, {
+      ...fromState(result.state),
+      history: appendHistory(room, result.state.lastMove),
+    });
+  },
+});
+
+export const forfeit = mutation({
+  args: { code: v.string(), guestId: v.string() },
+  handler: async (ctx, args) => {
+    const room = await ctx.db
+      .query("rooms")
+      .withIndex("by_code", (q) => q.eq("code", args.code))
+      .unique();
+    if (!room) throw new Error("Room not found.");
+    if (Date.now() > room.expiresAt) throw new Error("This room has expired.");
+    const result = forfeitMove(toState(room), args.guestId);
     if (!result.ok) throw new Error(result.error);
     await ctx.db.patch(room._id, {
       ...fromState(result.state),

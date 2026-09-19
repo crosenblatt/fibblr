@@ -13,4 +13,4 @@ export type {
 export { premiumAt, emptyBoard, emptyBlanks, idx, inBounds, getDigit, boardHasTiles } from "./board";
 export { isFibSequence, isDigit, isValidSequence } from "./fib";
 export { createBag, shuffle, fillRack, removeFromRack, rackSum, isBlankTile, sortRackTiles } from "./tiles";
-export { previewPlay, playMove, passMove, swapMove, startGame, newBag } from "./move";
+export { previewPlay, playMove, passMove, swapMove, forfeitMove, startGame, newBag } from "./move";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { emptyBoard, idx } from "./board";
-import { playMove, previewPlay, startGame, passMove, swapMove } from "./move";
+import { playMove, previewPlay, startGame, passMove, swapMove, forfeitMove } from "./move";
 import type { GameState, Placement, PlayerState } from "./types";
 import { BLANK } from "./types";
 
@@ -99,13 +99,17 @@ describe("previewPlay", () => {
     expect(hook.ok).toBe(false);
   });
 
-  it("scores an extension that forms a longer fib line", () => {
+  it("does not reapply the center double when extending the opening word", () => {
     const first = previewPlay(emptyBoard(), place([1, 1, 2], 6));
     expect(first.ok).toBe(true);
     if (!first.ok) return;
+    expect(first.score).toBe(8);
     const extend = previewPlay(first.board, [{ row: 7, col: 9, digit: 3 }]);
     expect(extend.ok).toBe(true);
-    if (extend.ok) expect(extend.score).toBeGreaterThan(0);
+    if (extend.ok) {
+      // 1+1+2+3 = 7; the star was already used.
+      expect(extend.score).toBe(7);
+    }
   });
 
   it("scores a blank as 0 while using its assigned digit in the sequence", () => {
@@ -182,5 +186,30 @@ describe("pass and swap", () => {
     if (!result.ok) return;
     expect(result.state.players[0]!.rack).toHaveLength(7);
     expect(result.state.turnGuestId).toBe("b");
+  });
+});
+
+describe("forfeit", () => {
+  it("ends the game and awards the opponent the win", () => {
+    const state = startGame(players(), seeded());
+    const result = forfeitMove(state, "a");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.status).toBe("finished");
+    expect(result.state.winnerGuestId).toBe("b");
+    expect(result.state.lastMove?.kind).toBe("forfeit");
+  });
+
+  it("allows forfeiting when it is not your turn", () => {
+    const started = startGame(players(), seeded());
+    const result = forfeitMove(started, "b");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.winnerGuestId).toBe("a");
+  });
+
+  it("rejects a forfeit from someone not in the game", () => {
+    const result = forfeitMove(startGame(players(), seeded()), "z");
+    expect(result.ok).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 import { BOARD_SIZE, idx, premiumAt } from "@/lib/game";
-import { readTileDrag, setTileDrag, type TileDrag } from "@/lib/drag";
+import { clearTileDrag, peekTileDrag, readTileDrag, setTileDrag, type TileDrag } from "@/lib/drag";
 import { TileFace } from "@/components/TileFace";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type PendingCell = {
   row: number;
@@ -14,9 +14,9 @@ type PendingCell = {
 const premiumClass: Record<string, string> = {
   none: "bg-[var(--board)]",
   dl: "bg-[var(--dl)]",
-  tl: "bg-[var(--tl)] text-white",
+  tl: "bg-[var(--tl)]",
   dw: "bg-[var(--dw)]",
-  tw: "bg-[var(--tw)] text-white",
+  tw: "bg-[var(--tw)]",
   center: "bg-[var(--center)]",
 };
 
@@ -57,11 +57,26 @@ export function Board({
   );
   const lastAt = new Set(lastPlacements.map((p) => `${p.row},${p.col}`));
   const dragged = useRef(false);
+  const [dropAt, setDropAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onEnd() {
+      setDropAt(null);
+      window.setTimeout(() => clearTileDrag(), 50);
+    }
+    window.addEventListener("dragend", onEnd);
+    return () => window.removeEventListener("dragend", onEnd);
+  }, []);
 
   return (
     <div
       className="inline-grid gap-px rounded-md bg-[#7a6240] p-1"
       style={{ gridTemplateColumns: "repeat(15, minmax(0, 1fr))" }}
+      onDragOver={(event) => {
+        if (!canDrop || !peekTileDrag()) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+      }}
     >
       {Array.from({ length: BOARD_SIZE * BOARD_SIZE }, (_, i) => {
         const row = Math.floor(i / BOARD_SIZE);
@@ -72,15 +87,18 @@ export function Board({
         const digit = ghost?.digit ?? committed;
         const isBlank =
           ghost !== undefined ? Boolean(ghost.blank) : blanks[idx(row, col)] === true;
+        const spent = committed !== null;
+        const visualPremium = spent ? "none" : premium;
         const isLast = lastAt.has(`${row},${col}`);
         const empty = committed === null && ghost === undefined;
         const acceptsDrop = canDrop && (empty || ghost !== undefined);
+        const cellKey = `${row},${col}`;
+        const isDropTarget = acceptsDrop && dropAt === cellKey;
 
         return (
-          <button
+          <div
             key={i}
-            type="button"
-            disabled={!canPlace && ghost === undefined && !canDrop}
+            role="gridcell"
             draggable={Boolean(ghost) && canDrop}
             onClick={() => {
               if (dragged.current) {
@@ -88,7 +106,7 @@ export function Board({
                 return;
               }
               if (ghost !== undefined) onRemovePending(row, col);
-              else if (committed === null) onPlace(row, col);
+              else if (committed === null && canPlace) onPlace(row, col);
             }}
             onDragStart={(event) => {
               if (!ghost) return;
@@ -102,31 +120,45 @@ export function Board({
                 fromCol: col,
               });
             }}
+            onDragEnter={(event) => {
+              if (!acceptsDrop) return;
+              event.preventDefault();
+              setDropAt(cellKey);
+            }}
             onDragOver={(event) => {
               if (!acceptsDrop) return;
               event.preventDefault();
               event.dataTransfer.dropEffect = "move";
+              if (dropAt !== cellKey) setDropAt(cellKey);
+            }}
+            onDragLeave={(event) => {
+              const next = event.relatedTarget as Node | null;
+              if (next && event.currentTarget.contains(next)) return;
+              setDropAt((current) => (current === cellKey ? null : current));
             }}
             onDrop={(event) => {
-              if (!acceptsDrop) return;
               event.preventDefault();
+              event.stopPropagation();
+              setDropAt(null);
+              if (!acceptsDrop) return;
               const payload = readTileDrag(event);
+              clearTileDrag();
               if (!payload) return;
               onDropTile(row, col, payload);
             }}
-            className={`relative flex h-[min(6vw,2.15rem)] w-[min(6vw,2.15rem)] items-center justify-center text-[10px] font-semibold sm:text-xs ${premiumClass[premium]} ${
+            className={`relative flex h-[min(6vw,2.15rem)] w-[min(6vw,2.15rem)] cursor-pointer items-center justify-center text-[10px] font-semibold sm:text-xs ${premiumClass[visualPremium]} ${
               ghost !== undefined ? "ring-2 ring-[#1b2420] ring-inset" : ""
-            } ${isLast ? "outline outline-2 outline-[#5c7a3a]" : ""}`}
-            aria-label={`Row ${row + 1} column ${col + 1}`}
+            } ${isDropTarget ? "drop-target-cell" : ""}`}
+            aria-label={`Row ${row + 1} column ${col + 1}${isLast ? ", last play" : ""}`}
           >
             {digit !== null && digit !== undefined ? (
-              <TileFace digit={digit} blank={isBlank} />
+              <TileFace digit={digit} blank={isBlank} lastPlay={isLast && ghost === undefined} />
             ) : (
               <span className="pointer-events-none opacity-80">
                 {premiumLabel[premium]}
               </span>
             )}
-          </button>
+          </div>
         );
       })}
     </div>

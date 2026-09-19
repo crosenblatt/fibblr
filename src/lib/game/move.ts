@@ -133,6 +133,7 @@ function scoreLine(
     const key = `${cell.row},${cell.col}`;
     const blank = newBlanks.has(key) || blanks[idx(cell.row, cell.col)] === true;
     let value = blank ? 0 : cell.digit;
+    // Premiums apply only for tiles placed on this turn (first use of the square).
     if (newKeys.has(key)) {
       const premium = premiumAt(cell.row, cell.col);
       if (premium === "dl") value *= 2;
@@ -370,6 +371,34 @@ export function passMove(
   };
   next = finishIfNeeded(next, turn.player);
   return { ok: true, state: next };
+}
+
+export function forfeitMove(
+  state: GameState,
+  guestId: string,
+): EngineResult<{ state: GameState }> {
+  if (state.status !== "active") {
+    return { ok: false, error: "This game is not in progress." };
+  }
+  const player = state.players.find((p) => p.guestId === guestId);
+  if (!player) return { ok: false, error: "You are not in this game." };
+  const winner = otherPlayer(state, guestId);
+  const lastMove: LastMove = {
+    guestId,
+    kind: "forfeit",
+    placements: [],
+    score: 0,
+  };
+  return {
+    ok: true,
+    state: {
+      ...state,
+      status: "finished",
+      turnGuestId: null,
+      winnerGuestId: winner?.guestId ?? null,
+      lastMove,
+    },
+  };
 }
 
 export function swapMove(

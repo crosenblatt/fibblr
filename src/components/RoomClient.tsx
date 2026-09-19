@@ -245,9 +245,15 @@ function RoomView({
       {room.status === "finished" ? (
         <p className="rounded-md bg-[#121916] px-3 py-2">
           Game over.{" "}
-          {room.winnerGuestId
-            ? `${room.players.find((p) => p.guestId === room.winnerGuestId)?.name ?? "A player"} wins.`
-            : "It's a draw."}
+          {room.lastMove?.kind === "forfeit"
+            ? `${room.players.find((p) => p.guestId === room.lastMove?.guestId)?.name ?? "A player"} forfeited. ${
+                room.winnerGuestId
+                  ? `${room.players.find((p) => p.guestId === room.winnerGuestId)?.name ?? "A player"} wins.`
+                  : "No winner."
+              }`
+            : room.winnerGuestId
+              ? `${room.players.find((p) => p.guestId === room.winnerGuestId)?.name ?? "A player"} wins.`
+              : "It's a draw."}
         </p>
       ) : null}
 
@@ -306,6 +312,7 @@ function PlayArea({
   const [swapSelected, setSwapSelected] = useState<Set<number>>(new Set());
   const [swapMode, setSwapMode] = useState(false);
   const [rackOrder, setRackOrder] = useState<number[]>([]);
+  const [confirmForfeit, setConfirmForfeit] = useState(false);
   const [assignBlank, setAssignBlank] = useState<{
     row: number;
     col: number;
@@ -314,6 +321,7 @@ function PlayArea({
   const submitMove = useMutation(api.rooms.submitMove);
   const pass = useMutation(api.rooms.pass);
   const swapTiles = useMutation(api.rooms.swapTiles);
+  const forfeit = useMutation(api.rooms.forfeit);
 
   const you = room.you ?? null;
   const isPlayer = Boolean(you);
@@ -337,6 +345,7 @@ function PlayArea({
     setSelectedRack(null);
     setSwapMode(false);
     setSwapSelected(new Set());
+    setConfirmForfeit(false);
     setError(null);
   }, [moveKey, setError]);
 
@@ -538,6 +547,16 @@ function PlayArea({
     }
   }
 
+  async function onForfeit() {
+    setError(null);
+    try {
+      await forfeit({ code, guestId });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not forfeit.");
+      setConfirmForfeit(false);
+    }
+  }
+
   async function onSwap() {
     if (!you) return;
     const digits = [...swapSelected].map((i) => you.rack[i]!);
@@ -571,7 +590,9 @@ function PlayArea({
           board={room.board}
           blanks={room.blanks ?? []}
           pending={pending}
-          lastPlacements={room.lastMove?.placements ?? []}
+          lastPlacements={
+            room.lastMove?.kind === "play" ? room.lastMove.placements : []
+          }
           canPlace={yourTurn && !swapMode && selectedRack !== null}
           canDrop={yourTurn && !swapMode}
           onPlace={placeOnBoard}
@@ -670,6 +691,32 @@ function PlayArea({
                 Confirm swap ({swapSelected.size})
               </button>
             ) : null}
+            {confirmForfeit ? (
+              <>
+                <button
+                  type="button"
+                  onClick={onForfeit}
+                  className="rounded-md border border-red-400 px-4 py-2 text-red-300"
+                >
+                  Confirm forfeit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmForfeit(false)}
+                  className="rounded-md border border-[#3d4a44] px-4 py-2"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmForfeit(true)}
+                className="rounded-md border border-[#3d4a44] px-4 py-2"
+              >
+                Forfeit
+              </button>
+            )}
           </div>
         </div>
       ) : isPlayer ? (
