@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { api } from "../../convex/_generated/api";
 import { Board } from "@/components/Board";
@@ -166,6 +167,21 @@ function RoomView({
   const remainingMin = Math.max(0, Math.ceil((room.expiresAt - now) / 60000));
   const you = room.you ?? null;
   const isPlayer = Boolean(you);
+  const router = useRouter();
+  const closeRoom = useMutation(api.rooms.closeRoom);
+  const [closing, setClosing] = useState(false);
+
+  async function onCloseSession() {
+    setClosing(true);
+    setError(null);
+    try {
+      await closeRoom({ code, guestId });
+      router.push("/");
+    } catch (err) {
+      setClosing(false);
+      setError(err instanceof Error ? err.message : "Could not close the room.");
+    }
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6">
@@ -243,18 +259,33 @@ function RoomView({
       ) : null}
 
       {room.status === "finished" ? (
-        <p className="rounded-md bg-[#121916] px-3 py-2">
-          Game over.{" "}
-          {room.lastMove?.kind === "forfeit"
-            ? `${room.players.find((p) => p.guestId === room.lastMove?.guestId)?.name ?? "A player"} forfeited. ${
-                room.winnerGuestId
-                  ? `${room.players.find((p) => p.guestId === room.winnerGuestId)?.name ?? "A player"} wins.`
-                  : "No winner."
-              }`
-            : room.winnerGuestId
-              ? `${room.players.find((p) => p.guestId === room.winnerGuestId)?.name ?? "A player"} wins.`
-              : "It's a draw."}
-        </p>
+        <div className="flex flex-col gap-3 rounded-md bg-[#121916] px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            Game over.{" "}
+            {room.lastMove?.kind === "forfeit"
+              ? `${room.players.find((p) => p.guestId === room.lastMove?.guestId)?.name ?? "A player"} forfeited. ${
+                  room.winnerGuestId
+                    ? `${room.players.find((p) => p.guestId === room.winnerGuestId)?.name ?? "A player"} wins.`
+                    : "No winner."
+                }`
+              : room.winnerGuestId
+                ? `${room.players.find((p) => p.guestId === room.winnerGuestId)?.name ?? "A player"} wins.`
+                : "It's a draw."}{" "}
+            <span className="text-sm text-[#d7d1c4]">
+              This room closes in {remainingMin} min.
+            </span>
+          </p>
+          {isPlayer ? (
+            <button
+              type="button"
+              disabled={closing}
+              onClick={onCloseSession}
+              className="rounded-md border border-[#3d4a44] px-4 py-2 text-sm hover:bg-[#1b2420] disabled:opacity-40"
+            >
+              {closing ? "Closing…" : "Close session"}
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">

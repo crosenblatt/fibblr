@@ -1,4 +1,4 @@
-export { BOARD_SIZE, CENTER, RACK_SIZE, BINGO_BONUS, BLANK, BLANK_COUNT, ROOM_TTL_MS } from "./types";
+export { BOARD_SIZE, CENTER, RACK_SIZE, BINGO_BONUS, BLANK, BLANK_COUNT, ROOM_TTL_MS, FINISHED_TTL_MS } from "./types";
 export type {
   Premium,
   RoomStatus,

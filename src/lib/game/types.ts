@@ -6,6 +6,7 @@ export const BLANK = -1;
 export const BLANK_COUNT = 2;
 export const BINGO_BONUS = 50;
 export const ROOM_TTL_MS = 3 * 60 * 60 * 1000;
+export const FINISHED_TTL_MS = 5 * 60 * 1000;
 
 export type Premium = "none" | "dl" | "tl" | "dw" | "tw" | "center";
 export type RoomStatus = "lobby" | "active" | "finished" | "expired";
