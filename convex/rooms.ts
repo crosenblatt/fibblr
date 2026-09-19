@@ -10,6 +10,7 @@ import {
   startGame,
   swapMove,
   type GameState,
+  type LastMove,
 } from "../src/lib/game";
 import { placementValidator } from "./schema";
 
@@ -54,6 +55,7 @@ function redact(room: Doc<"rooms">, guestId: string) {
     consecutivePasses: room.consecutivePasses,
     winnerGuestId: room.winnerGuestId,
     lastMove: room.lastMove,
+    history: room.history ?? [],
     you: room.players.find((p) => p.guestId === guestId) ?? null,
     players: room.players.map((p) => ({
       guestId: p.guestId,
@@ -64,6 +66,12 @@ function redact(room: Doc<"rooms">, guestId: string) {
       isYou: p.guestId === guestId,
     })),
   };
+}
+
+function appendHistory(room: Doc<"rooms">, move: LastMove | null) {
+  if (!move) return room.history ?? [];
+  const name = room.players.find((p) => p.guestId === move.guestId)?.name ?? "Player";
+  return [...(room.history ?? []), { ...move, name, at: Date.now() }].slice(-80);
 }
 
 function trimName(name: string): string {
@@ -164,7 +172,10 @@ export const submitMove = mutation({
     if (Date.now() > room.expiresAt) throw new Error("This room has expired.");
     const result = playMove(toState(room), args.guestId, args.placements);
     if (!result.ok) throw new Error(result.error);
-    await ctx.db.patch(room._id, fromState(result.state));
+    await ctx.db.patch(room._id, {
+      ...fromState(result.state),
+      history: appendHistory(room, result.state.lastMove),
+    });
     return { score: result.score };
   },
 });
@@ -180,7 +191,10 @@ export const pass = mutation({
     if (Date.now() > room.expiresAt) throw new Error("This room has expired.");
     const result = passMove(toState(room), args.guestId);
     if (!result.ok) throw new Error(result.error);
-    await ctx.db.patch(room._id, fromState(result.state));
+    await ctx.db.patch(room._id, {
+      ...fromState(result.state),
+      history: appendHistory(room, result.state.lastMove),
+    });
   },
 });
 
@@ -199,7 +213,10 @@ export const swapTiles = mutation({
     if (Date.now() > room.expiresAt) throw new Error("This room has expired.");
     const result = swapMove(toState(room), args.guestId, args.digits);
     if (!result.ok) throw new Error(result.error);
-    await ctx.db.patch(room._id, fromState(result.state));
+    await ctx.db.patch(room._id, {
+      ...fromState(result.state),
+      history: appendHistory(room, result.state.lastMove),
+    });
   },
 });
 
@@ -212,6 +229,13 @@ export const expireRooms = internalMutation({
       .withIndex("by_expiresAt", (q) => q.lt("expiresAt", now))
       .take(50);
     for (const room of expired) {
+      const messages = await ctx.db
+        .query("messages")
+        .withIndex("by_code", (q) => q.eq("code", room.code))
+        .take(200);
+      for (const message of messages) {
+        await ctx.db.delete(message._id);
+      }
       await ctx.db.delete(room._id);
     }
   },

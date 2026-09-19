@@ -6,8 +6,10 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { api } from "../../convex/_generated/api";
 import { Board } from "@/components/Board";
 import { Rack } from "@/components/Rack";
+import { GameChat } from "@/components/GameChat";
+import { ScoreHistory } from "@/components/ScoreHistory";
 import { getGuestId, getSavedName, saveName } from "@/lib/guest";
-import { idx, isBlankTile, previewPlay, sortRackTiles, type Placement } from "@/lib/game";
+import { idx, isBlankTile, previewPlay, shuffle, sortRackTiles, type Placement } from "@/lib/game";
 import type { TileDrag } from "@/lib/drag";
 
 type Pending = Placement & { rackIndex: number };
@@ -166,7 +168,7 @@ function RoomView({
   const isPlayer = Boolean(you);
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link href="/" className="text-sm text-[#c8b48a]">
@@ -249,32 +251,39 @@ function RoomView({
         </p>
       ) : null}
 
-      {room.status === "active" ? (
-        <p className="text-sm text-[#d7d1c4]">
-          {room.turnGuestId === guestId
-            ? "Your turn. Sequences of 3+ must be Fibonacci mod 10. Two tiles are legal if they differ by 0 or 1. Enter submits. Blanks are wild and score 0."
-            : `Waiting for ${room.players.find((p) => p.guestId === room.turnGuestId)?.name ?? "opponent"}.`}{" "}
-          Bag: {room.bagCount} tiles.
-        </p>
-      ) : null}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="flex flex-col gap-6">
+          {room.status === "active" ? (
+            <p className="text-sm text-[#d7d1c4]">
+              {room.turnGuestId === guestId
+                ? "Your turn. Sequences of 3+ must be Fibonacci mod 10. Two tiles are legal if they differ by 0 or 1. Enter submits. Blanks are wild and score 0."
+                : `Waiting for ${room.players.find((p) => p.guestId === room.turnGuestId)?.name ?? "opponent"}.`}{" "}
+              Bag: {room.bagCount} tiles.
+            </p>
+          ) : null}
 
-      {room.lastMove && room.status === "active" ? (
-        <p
-          key={`${room.lastMove.guestId}-${room.lastMove.kind}-${room.lastMove.score}-${room.turnGuestId}`}
-          className="turn-banner rounded-md border border-[#c8b48a] bg-[#121916] px-3 py-2 text-sm"
-        >
-          {lastMoveText(room, guestId)}
-        </p>
-      ) : null}
+          {room.lastMove && room.status === "active" ? (
+            <p
+              key={`${room.lastMove.guestId}-${room.lastMove.kind}-${room.lastMove.score}-${room.turnGuestId}`}
+              className="turn-banner rounded-md border border-[#c8b48a] bg-[#121916] px-3 py-2 text-sm"
+            >
+              {lastMoveText(room, guestId)}
+            </p>
+          ) : null}
 
-      <PlayArea
-        key={`${room.turnGuestId}-${room.lastMove?.kind ?? "none"}-${room.lastMove?.score ?? 0}`}
-        code={code}
-        guestId={guestId}
-        room={room}
-        error={error}
-        setError={setError}
-      />
+          <PlayArea
+            code={code}
+            guestId={guestId}
+            room={room}
+            error={error}
+            setError={setError}
+          />
+        </div>
+        <aside className="flex flex-col gap-3">
+          <ScoreHistory history={room.history ?? []} guestId={guestId} />
+          <GameChat code={code} guestId={guestId} enabled={isPlayer} />
+        </aside>
+      </div>
     </main>
   );
 }
@@ -296,7 +305,7 @@ function PlayArea({
   const [selectedRack, setSelectedRack] = useState<number | null>(null);
   const [swapSelected, setSwapSelected] = useState<Set<number>>(new Set());
   const [swapMode, setSwapMode] = useState(false);
-  const [sorted, setSorted] = useState(false);
+  const [rackOrder, setRackOrder] = useState<number[]>([]);
   const [assignBlank, setAssignBlank] = useState<{
     row: number;
     col: number;
@@ -310,13 +319,41 @@ function PlayArea({
   const isPlayer = Boolean(you);
   const yourTurn = room.status === "active" && room.turnGuestId === guestId;
   const usedRack = new Set(pending.map((p) => p.rackIndex));
+  const rackSignature = you?.rack.join(",") ?? "";
+  const moveKey = `${room.turnGuestId}:${room.lastMove?.guestId ?? ""}:${room.lastMove?.kind ?? ""}:${room.lastMove?.score ?? 0}`;
+
+  useEffect(() => {
+    const n = you?.rack.length ?? 0;
+    setRackOrder((prev) => {
+      const valid = prev.filter((i) => i < n);
+      const missing = Array.from({ length: n }, (_, i) => i).filter((i) => !valid.includes(i));
+      return [...valid, ...missing];
+    });
+  }, [rackSignature]);
+
+  useEffect(() => {
+    setPending([]);
+    setAssignBlank(null);
+    setSelectedRack(null);
+    setSwapMode(false);
+    setSwapSelected(new Set());
+    setError(null);
+  }, [moveKey, setError]);
+
   const rackTiles = useMemo(() => {
-    const tiles =
+    const remaining =
       you?.rack
         .map((digit, index) => ({ index, digit }))
         .filter((tile) => !usedRack.has(tile.index)) ?? [];
-    return sorted ? sortRackTiles(tiles) : tiles;
-  }, [you?.rack, usedRack, sorted]);
+    const byIndex = new Map(remaining.map((tile) => [tile.index, tile]));
+    const ordered = rackOrder
+      .map((index) => byIndex.get(index))
+      .filter((tile): tile is { index: number; digit: number } => tile !== undefined);
+    for (const tile of remaining) {
+      if (!ordered.some((t) => t.index === tile.index)) ordered.push(tile);
+    }
+    return ordered;
+  }, [you?.rack, usedRack, rackOrder]);
 
   const preview = useMemo(() => {
     if (pending.length === 0) return null;
@@ -328,6 +365,7 @@ function PlayArea({
   }, [room.board, room.blanks, pending]);
 
   function toggleRack(index: number) {
+    if (!yourTurn) return;
     if (swapMode) {
       setSwapSelected((prev) => {
         const next = new Set(prev);
@@ -415,6 +453,39 @@ function PlayArea({
     });
     setSelectedRack(null);
     setError(null);
+  }
+
+  function reorderRack(fromIndex: number, beforeIndex: number | null) {
+    if (fromIndex === beforeIndex) return;
+    setRackOrder((current) => {
+      const without = current.filter((i) => i !== fromIndex);
+      if (beforeIndex === null) return [...without, fromIndex];
+      const at = without.indexOf(beforeIndex);
+      if (at < 0) return [...without, fromIndex];
+      const next = without.slice();
+      next.splice(at, 0, fromIndex);
+      return next;
+    });
+  }
+
+  function permuteVisible(permute: (visible: number[]) => number[]) {
+    setRackOrder((current) => {
+      const visible = current.filter((i) => !usedRack.has(i));
+      const nextVisible = permute(visible);
+      let n = 0;
+      return current.map((i) => (usedRack.has(i) ? i : nextVisible[n++]!));
+    });
+  }
+
+  function sortVisibleRack() {
+    const byDigit = new Map(rackTiles.map((tile) => [tile.index, tile]));
+    permuteVisible((visible) =>
+      sortRackTiles(visible.map((index) => byDigit.get(index)!)).map((tile) => tile.index),
+    );
+  }
+
+  function shuffleVisibleRack() {
+    permuteVisible((visible) => shuffle(visible));
   }
 
   function removePending(row: number, col: number) {
@@ -516,18 +587,29 @@ function PlayArea({
               tiles={rackTiles}
               selected={swapMode ? swapSelected : selectedRack !== null ? new Set([selectedRack]) : new Set()}
               disabled={!yourTurn}
-              draggableTiles={yourTurn && !swapMode}
+              draggableTiles={!swapMode}
               onToggle={toggleRack}
               onDropPending={(payload) => removePending(payload.fromRow, payload.fromCol)}
+              onReorder={reorderRack}
             />
-            <button
-              type="button"
-              disabled={!yourTurn || rackTiles.length < 2}
-              onClick={() => setSorted((value) => !value)}
-              className="rounded-md border border-[#3d4a44] px-3 py-2 text-sm disabled:opacity-40"
-            >
-              {sorted ? "Unsort" : "Sort rack"}
-            </button>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={rackTiles.length < 2}
+                onClick={sortVisibleRack}
+                className="rounded-md border border-[#3d4a44] px-3 py-2 text-sm disabled:opacity-40"
+              >
+                Sort rack
+              </button>
+              <button
+                type="button"
+                disabled={rackTiles.length < 2}
+                onClick={shuffleVisibleRack}
+                className="rounded-md border border-[#3d4a44] px-3 py-2 text-sm disabled:opacity-40"
+              >
+                Shuffle rack
+              </button>
+            </div>
           </div>
           {pending.length > 0 ? (
             <div className="flex w-full max-w-md flex-col items-center gap-1">
@@ -592,10 +674,12 @@ function PlayArea({
         </div>
       ) : isPlayer ? (
         <Rack
-          tiles={(you?.rack ?? []).map((digit, index) => ({ index, digit }))}
+          tiles={rackTiles.length > 0 ? rackTiles : (you?.rack ?? []).map((digit, index) => ({ index, digit }))}
           selected={new Set()}
           disabled
+          draggableTiles={room.status !== "finished"}
           onToggle={() => {}}
+          onReorder={reorderRack}
         />
       ) : room.status === "active" ? (
         <p className="text-center text-sm text-[#d7d1c4]">This room is full.</p>

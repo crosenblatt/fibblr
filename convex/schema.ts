@@ -22,6 +22,11 @@ export const lastMoveValidator = v.object({
   score: v.number(),
 });
 
+export const historyEntryValidator = lastMoveValidator.extend({
+  name: v.string(),
+  at: v.number(),
+});
+
 export default defineSchema({
   rooms: defineTable({
     code: v.string(),
@@ -41,7 +46,14 @@ export default defineSchema({
     consecutivePasses: v.number(),
     winnerGuestId: v.union(v.string(), v.null()),
     lastMove: v.union(lastMoveValidator, v.null()),
+    history: v.optional(v.array(historyEntryValidator)),
   })
     .index("by_code", ["code"])
     .index("by_expiresAt", ["expiresAt"]),
+  messages: defineTable({
+    code: v.string(),
+    guestId: v.string(),
+    name: v.string(),
+    text: v.string(),
+  }).index("by_code", ["code"]),
 });
