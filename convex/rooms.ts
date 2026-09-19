@@ -1,8 +1,9 @@
 import { v } from "convex/values";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query, type MutationCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import {
   ROOM_TTL_MS,
+  FINISHED_TTL_MS,
   emptyBlanks,
   emptyBoard,
   passMove,
@@ -79,6 +80,27 @@ function trimName(name: string): string {
   const next = name.trim().slice(0, 24);
   if (!next) throw new Error("Enter a name.");
   return next;
+}
+
+async function deleteRoomWithMessages(ctx: MutationCtx, room: Doc<"rooms">) {
+  const messages = await ctx.db
+    .query("messages")
+    .withIndex("by_code", (q) => q.eq("code", room.code))
+    .take(200);
+  for (const message of messages) {
+    await ctx.db.delete(message._id);
+  }
+  await ctx.db.delete(room._id);
+}
+
+function gamePatch(room: Doc<"rooms">, state: GameState) {
+  return {
+    ...fromState(state),
+    history: appendHistory(room, state.lastMove),
+    ...(state.status === "finished"
+      ? { expiresAt: Date.now() + FINISHED_TTL_MS }
+      : {}),
+  };
 }
 
 export const getRoom = query({
@@ -173,10 +195,7 @@ export const submitMove = mutation({
     if (Date.now() > room.expiresAt) throw new Error("This room has expired.");
     const result = playMove(toState(room), args.guestId, args.placements);
     if (!result.ok) throw new Error(result.error);
-    await ctx.db.patch(room._id, {
-      ...fromState(result.state),
-      history: appendHistory(room, result.state.lastMove),
-    });
+    await ctx.db.patch(room._id, gamePatch(room, result.state));
     return { score: result.score };
   },
 });
@@ -192,10 +211,7 @@ export const pass = mutation({
     if (Date.now() > room.expiresAt) throw new Error("This room has expired.");
     const result = passMove(toState(room), args.guestId);
     if (!result.ok) throw new Error(result.error);
-    await ctx.db.patch(room._id, {
-      ...fromState(result.state),
-      history: appendHistory(room, result.state.lastMove),
-    });
+    await ctx.db.patch(room._id, gamePatch(room, result.state));
   },
 });
 
@@ -214,10 +230,7 @@ export const swapTiles = mutation({
     if (Date.now() > room.expiresAt) throw new Error("This room has expired.");
     const result = swapMove(toState(room), args.guestId, args.digits);
     if (!result.ok) throw new Error(result.error);
-    await ctx.db.patch(room._id, {
-      ...fromState(result.state),
-      history: appendHistory(room, result.state.lastMove),
-    });
+    await ctx.db.patch(room._id, gamePatch(room, result.state));
   },
 });
 
@@ -232,10 +245,25 @@ export const forfeit = mutation({
     if (Date.now() > room.expiresAt) throw new Error("This room has expired.");
     const result = forfeitMove(toState(room), args.guestId);
     if (!result.ok) throw new Error(result.error);
-    await ctx.db.patch(room._id, {
-      ...fromState(result.state),
-      history: appendHistory(room, result.state.lastMove),
-    });
+    await ctx.db.patch(room._id, gamePatch(room, result.state));
+  },
+});
+
+export const closeRoom = mutation({
+  args: { code: v.string(), guestId: v.string() },
+  handler: async (ctx, args) => {
+    const room = await ctx.db
+      .query("rooms")
+      .withIndex("by_code", (q) => q.eq("code", args.code))
+      .unique();
+    if (!room) return;
+    if (!room.players.some((p) => p.guestId === args.guestId)) {
+      throw new Error("You are not in this game.");
+    }
+    if (room.status !== "finished") {
+      throw new Error("The game is still in progress.");
+    }
+    await deleteRoomWithMessages(ctx, room);
   },
 });
 
@@ -248,14 +276,7 @@ export const expireRooms = internalMutation({
       .withIndex("by_expiresAt", (q) => q.lt("expiresAt", now))
       .take(50);
     for (const room of expired) {
-      const messages = await ctx.db
-        .query("messages")
-        .withIndex("by_code", (q) => q.eq("code", room.code))
-        .take(200);
-      for (const message of messages) {
-        await ctx.db.delete(message._id);
-      }
-      await ctx.db.delete(room._id);
+      await deleteRoomWithMessages(ctx, room);
     }
   },
 });
